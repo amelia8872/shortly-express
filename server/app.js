@@ -3,6 +3,7 @@ const path = require('path');
 const utils = require('./lib/hashUtils');
 const partials = require('express-partials');
 const Auth = require('./middleware/auth');
+const parseCookies = require('./middleware/cookieParser');
 const models = require('./models');
 
 const app = express();
@@ -15,18 +16,25 @@ app.use(express.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, '../public')));
 
 
+// add middleware
+app.use(parseCookies);
+app.use(Auth.createSession);
+
+
 
 app.get('/',
   (req, res) => {
-    res.render('index');
+    Auth.verifySession.call(this, req, res, () => {
+      res.render('index');
+    });
   });
 
-app.get('/create',
+app.get('/create', Auth.verifySession,
   (req, res) => {
     res.render('index');
   });
 
-app.get('/links',
+app.get('/links', Auth.verifySession,
   (req, res, next) => {
     models.Links.getAll()
       .then(links => {
@@ -37,9 +45,10 @@ app.get('/links',
       });
   });
 
-app.post('/links',
+app.post('/links', Auth.verifySession,
   (req, res, next) => {
     var url = req.body.url;
+    console.log('URL: ', url);
     if (!models.Links.isValidUrl(url)) {
       // send back a 404 if link is not valid
       return res.sendStatus(404);
@@ -83,10 +92,18 @@ app.get('/signup', (req, res) => {
 
 //app.post
 app.post('/signup', (req, res) => {
+  console.log('DO WE USE STHIS FOR TEST?');
   // req body { username: 'Samantha', password: 'Samantha' }
   // console.log('req body', req.body);
   models.Users.create(req.body)
-    .then((success) => {
+    .then((data) => {
+      return models.Sessions.update({ hash: req.session.hash }, { userId: data.insertId });
+    })
+    // promise session obj
+    // update our req.session.userId(id in table) req.session.user(username)
+    .then((data) => {
+      req.session.userId = data.insertId;
+      req.session.user = { username: req.body.username };
       res.location('/');
       res.render('index');
     })
@@ -95,6 +112,8 @@ app.post('/signup', (req, res) => {
       res.render('signup'); // render signup page
     });
 });
+
+
 
 // res.location:
 
@@ -106,7 +125,14 @@ app.post('/signup', (req, res) => {
 
 
 //----------------------LOGIN---------------------------//
+app.get('/login', (req, res) => {
+  res.location('/login');
+  res.render('login');
+});
+
+
 app.post('/login', (req, res) => {
+  console.log('DO WE USE THIS FOR TEST?');
   // login req body { username: 'Samantha', password: 'Samantha' }
   // console.log('login req body', req.body);
   var options = {};
@@ -115,30 +141,68 @@ app.post('/login', (req, res) => {
   // var password = req.body.password;
   // var salt = utils.createHash(password);
   // console.log('salt', salt);
-  models.Users.get(options)
+  return models.Users.get(options)
     .then((success) => {
+      console.log('SUCCESS: ', success);
       var attempted = req.body.password;
-      console.log('success', success);
+      // console.log('success', success);
       var password = success.password;
       var salt = success.salt;
 
-      // console.log(password);
-      if (models.Users.compare(attempted, password, salt)) {
+      // // console.log(password);
+      // if (models.Users.compare(attempted, password, salt)) {
+      //   // enter the right password
+      //   res.location('/');
+      //   res.render('index');
+      // } else {
+      //   res.location('/login');
+      //   res.render('login');
+
+      // }
+      if (!models.Users.compare(attempted, password, salt)) {
         // enter the right password
-        res.location('/');
-        res.render('index');
-      } else {
-        res.location('/login');
-        res.render('login');
+
+        throw error;
       }
+      return models.Sessions.update({hash: req.session.hash}, {userId: success.id});
+    })
+
+    .then((data) => {
+      // console.log(data);
+      res.location('/');
+      res.render('index');
+      // res.redirect('/');
+    })
+    .error(error => {
+      res.status(500).send(error);
     })
     .catch((error) => {
+      // console.log('BReak here?', error.message);
       res.location('/login');
       res.render('login');
 
     });
+});
+
+
+
+
+app.get('/logout', (req, res, next) => {
+  console.log('logout request:', req.session);
+  return models.Sessions.delete({hash: req.session.hash})
+    .then(() => {
+      res.cookie('shortlyid');
+      res.location('/login');
+      res.render('login');
+    });
+
 
 });
+
+
+
+
+
 
 
 

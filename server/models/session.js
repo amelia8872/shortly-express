@@ -20,6 +20,7 @@ class Sessions extends Model {
    * with a user that is logged in.
    */
   isLoggedIn(session) {
+    console.log('RETURNED from isLoggedIn: ', !!session.user);
     return !!session.user;
   }
 
@@ -38,6 +39,8 @@ class Sessions extends Model {
         if (!session || !session.userId) {
           return session;
         }
+
+        // retrieve username from users and set sesson user to username
         return Users.get({ id: session.userId }).then(user => {
           session.user = user;
           return session;

@@ -14,6 +14,8 @@ const parseData = options => {
 };
 
 // _.reduce(array, callback, initial)
+//string:[username, password]
+//valurs:[name1, pass1]
 
 /**
  * Base class for all database models, written in ES6 class format. You should NOT refer
@@ -54,6 +56,9 @@ class Model {
    */
   get(options) {
     let parsedOptions = parseData(options);
+    //string:[username, password]
+    //values:[name1, pass1]
+    // username AND password
     let queryString = `SELECT * FROM ${this.tablename} WHERE ${parsedOptions.string.join(' AND ')} LIMIT 1`;
     return executeQuery(queryString, parsedOptions.values).then(results => results[0]);
   }
